@@ -10,7 +10,7 @@ except ImportError:
 from tyumproxy import VERSION
 
 if sys.version_info < (3, 3):
-    sys.exit("requires python 3.3 and up")
+    sys.exit('requires python 3.3 and up')
 
 here = os.path.dirname(__file__)
 
@@ -21,9 +21,8 @@ setup(
     long_description=open('README.rst').read(),
     author='A. Azhar Mashuri',
     author_email='hurie83@gmail.com',
-    url='https://github.com/hurie83/tyumproxy',
+    url='https://github.com/hurie/tyumproxy',
     install_requires=[
-        'PyYAML>=3.11',
         'pathlib>=1.0',
         'tornado>=4.0.1',
     ],
@@ -32,7 +31,8 @@ setup(
         'tyumproxy',
     ],
     package_data={'tyumproxy': [
-        'template/config.yml',
+        'template/default.cfg',
+        'template/template.cfg.txt',
     ]},
     entry_points={
         'console_scripts': [
