@@ -1,0 +1,45 @@
+[server]
+port = {server[port]}
+
+[cache]
+dir = {cache[dir]}
+lifetime = {cache[lifetime]}
+
+[proxy]
+timeout = {proxy[timeout]}
+
+[loggers]
+keys = {loggers[keys]}
+
+[handlers]
+keys = {handlers[keys]}
+
+[formatters]
+keys = {formatters[keys]}
+
+[logger_root]
+propagate = {logger_root[propagate]}
+handlers = {logger_root[handlers]}
+level = {logger_root[level]}
+
+[logger_tornado]
+qualname = {logger_tornado[qualname]}
+handlers = {logger_tornado[handlers]}
+
+[handler_console]
+class = {handler_console[class]}
+level = {handler_console[level]}
+formatter = {handler_console[formatter]}
+args = {handler_console[args]}
+
+[handler_file]
+class = {handler_file[class]}
+level = {handler_file[level]}
+formatter = {handler_file[formatter]}
+args = {handler_file[args]}
+
+[formatter_simple]
+format = {formatter_simple[format]}
+
+[formatter_verbose]
+format =  {formatter_verbose[format]}
