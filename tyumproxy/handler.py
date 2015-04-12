@@ -91,7 +91,8 @@ class ProxyHandler(tornado.web.StaticFileHandler):
                           follow_redirects=False,
                           if_modified_since=cache_time,
                           allow_nonstandard_methods=True,
-                          request_timeout=int(self.settings['proxy']['timeout']),
+                          connect_timeout=int(self.settings['proxy']['timeout']),
+                          request_timeout=99999999,
                           header_callback=self.process_header,
                           streaming_callback=self.process_body,
                           callback=self.process_finish)
