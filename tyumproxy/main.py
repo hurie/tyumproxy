@@ -74,8 +74,7 @@ def load_config(filename):
     cfg = ConfigParser(interpolation=None)
     cfg['server'] = {}
     cfg['server']['path'] = str(config_file.parent.resolve())
-    # cfg.read([str(default_file), str(config_file)])
-    cfg.read([str(default_file)])
+    cfg.read([str(default_file), str(config_file)])
     return cfg
 
 
@@ -263,7 +262,6 @@ def main():
         raise
 
     setup_logging(args.config)
-    logging.debug('test')
     start(args, cfg)
 
 
