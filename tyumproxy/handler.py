@@ -104,9 +104,13 @@ class ProxyHandler(tornado.web.StaticFileHandler):
                 self.req_headers = HTTPHeaders()
                 _, self.req_code, _ = header.split(' ', 2)
                 self.req_code = int(self.req_code)
+                if self.req_code in (599, 304):
+                    self.req_code = 200
             else:
                 self.req_headers.parse_line(line)
             return
+
+        self.set_status(self.req_code)
 
         for header in ('Date', 'Cache-Control', 'Server', 'Content-Type', 'Location'):
             val = self.req_headers.get(header)
