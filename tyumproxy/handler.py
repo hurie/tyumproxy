@@ -29,8 +29,8 @@ class ProxyHandler(tornado.web.StaticFileHandler):
         tornado.web.StaticFileHandler.initialize(self, str(self.cache_dir))
 
     def prepare(self):
-        self.cacheable_exts = ('.rpm', '.img', '.sqlite.bz2', '.xml', '.xml.gz', '.qcow2', '.raw.xz', '.iso',
-                               'filelist.gz', 'vmlinuz')
+        self.cacheable_exts = ('.rpm', '.img', '.sqlite.bz2', '.sqlite.gz', '.xml', '.xml.gz', '.qcow2', '.raw.xz',
+                               '.iso', 'filelist.gz', 'vmlinuz')
 
         self.cacheable = False
         self.cache_used = False
