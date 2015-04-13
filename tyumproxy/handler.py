@@ -29,6 +29,9 @@ class ProxyHandler(tornado.web.StaticFileHandler):
 
         tornado.web.StaticFileHandler.initialize(self, str(self.cache_dir))
 
+    def data_received(self, chunk):
+        raise NotImplementedError()
+
     def prepare(self):
         self.cacheable_exts = ('.rpm', '.img', '.sqlite.bz2', '.sqlite.gz', '.xml', '.xml.gz', '.qcow2', '.raw.xz',
                                '.iso', 'filelist.gz', 'vmlinuz')
@@ -48,7 +51,7 @@ class ProxyHandler(tornado.web.StaticFileHandler):
 
     @tornado.gen.coroutine
     @tornado.web.asynchronous
-    def get(self, path):
+    def get(self, path, include_body=True):
         self.req_path = path
         app_log.info('process %s', path)
 
