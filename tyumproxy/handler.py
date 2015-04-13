@@ -4,6 +4,7 @@ Created on Aug 15, 2014
 @author: Azhar
 """
 import hashlib
+import re
 import socket
 from tempfile import NamedTemporaryFile
 from time import time
@@ -60,8 +61,39 @@ class ProxyHandler(tornado.web.StaticFileHandler):
         self.cacheable = self.is_cacheable(url.path)
         app_log.debug('is cacheable %r', self.cacheable)
         if self.cacheable:
-            netloc = [x for x in reversed(url.netloc.split('.'))]
-            self.cache_file = self.cache_dir / '.'.join(netloc) / url.path[1:]
+            patterns = self.application.get_pattern(url.netloc)
+            for pattern in patterns:
+                match = None
+                i = 0
+                while not match and str(i) in pattern:
+                    match = re.match(pattern[str(i)], url.path)
+                    i += 1
+
+                if match:
+                    break
+            else:
+                pattern = []
+                match = None
+
+            if match:
+                d = {k: pattern[k] for k in pattern if k != '_'}
+                d.update(match.groupdict())
+
+                try:
+                    pathname = '{releasename}/{releasever}/{reponame}/{basearch}'.format(**d).lower()
+
+                    if 'filepath' in d and d['filepath']:
+                        filename = '{pathname}/{filepath}/{filename}'.format(pathname=pathname, **d)
+                    else:
+                        filename = '{pathname}/{filename}'.format(pathname=pathname, **d)
+                except Exception as e:
+                    match = None
+                else:
+                    self.cache_file = self.cache_dir / ('~%s' % filename)
+
+            if not match:
+                netloc = [x for x in reversed(url.netloc.split('.'))]
+                self.cache_file = self.cache_dir / '.'.join(netloc) / url.path[1:]
         else:
             cache_id = hashlib.sha1(self.request.uri.encode()).hexdigest()
             self.cache_file = self.cache_dir / '~' / cache_id[:2] / cache_id

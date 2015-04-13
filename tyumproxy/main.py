@@ -55,6 +55,18 @@ class Application(tornado.web.Application):
         base = pathlib.Path(self.settings['cache']['dir'])
         return base
 
+    def get_pattern(self, host):
+        if 'pattern/default' in self.settings:
+            patterns = [self.settings['pattern/default']]
+        else:
+            patterns = []
+
+        section = 'pattern/%s' % host
+        if section in self.settings:
+            patterns.insert(0, self.settings['pattern/%s' % host])
+
+        return patterns
+
 
 def merge_dict(source, other):
     for key in other:
