@@ -95,8 +95,19 @@ class ProxyHandler(tornado.web.StaticFileHandler):
                 netloc = [x for x in reversed(url.netloc.split('.'))]
                 self.cache_file = self.cache_dir / '.'.join(netloc) / url.path[1:]
         else:
-            cache_id = hashlib.sha1(self.request.uri.encode()).hexdigest()
-            self.cache_file = self.cache_dir / '~' / cache_id[:2] / cache_id
+            uri = self.request.uri.encode()
+            cache_id = hashlib.sha1(uri).hexdigest()
+            cache_path = self.cache_dir / '~' / cache_id[:2]
+
+            cache_info = cache_path / (cache_id + '-url.txt')
+            if not cache_info.exists():
+                if not cache_info.parent.exists():
+                    cache_info.parent.mkdir(parents=True)
+
+                with cache_info.open('w') as f:
+                    f.write(uri.decode())
+
+            self.cache_file = cache_path / (cache_id + '-data.txt')
 
         if self.cache_file.exists():
             self.cache_file = self.cache_file.resolve()
