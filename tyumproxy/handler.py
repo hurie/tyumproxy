@@ -56,10 +56,7 @@ class ProxyHandler(tornado.web.StaticFileHandler):
         app_log.info('process %s', path)
 
         url = urlsplit(path)
-        lifetime = time() - int(self.settings['cache']['lifetime']) * 60 * 60
-        # lifetime = 2 ** 32 - 1
 
-        cache_time = None
         self.cache_url = path.replace(url[0] + '://', '')
         self.cacheable = self.is_cacheable(url.path)
         app_log.debug('is cacheable %r', self.cacheable)
@@ -86,10 +83,12 @@ class ProxyHandler(tornado.web.StaticFileHandler):
 
             self.cache_file = cache_path / (cache_id + '-data.txt')
 
+        cache_time = None
         if self.cache_file.exists():
             self.cache_file = self.cache_file.resolve()
             cache_time = self.cache_file.stat().st_mtime
 
+            lifetime = time() - int(self.settings['cache']['lifetime']) * 60 * 60
             app_log.debug('cache time is %r lifetime is %r', cache_time, lifetime)
             if cache_time > lifetime:
                 app_log.info('found %s', self.cache_file)
@@ -112,7 +111,7 @@ class ProxyHandler(tornado.web.StaticFileHandler):
                           if_modified_since=cache_time,
                           allow_nonstandard_methods=True,
                           connect_timeout=int(self.settings['proxy']['timeout']),
-                          request_timeout=99999999,
+                          request_timeout=2 ** 31 - 1,
                           header_callback=self.process_header,
                           streaming_callback=self.process_body,
                           callback=self.process_finish)
@@ -234,15 +233,15 @@ class ProxyHandler(tornado.web.StaticFileHandler):
         client = self.request.connection.stream
 
         def read_from_client(data):
-            app_log.debug('read from client\n%s', data)
+            # app_log.debug('read from client\n%s', data)
             upstream.write(data)
 
         def read_from_upstream(data):
-            app_log.debug('read from upstream\n%s', data)
+            # app_log.debug('read from upstream\n%s', data)
             client.write(data)
 
         def client_close(data=None):
-            app_log.debug('client close\n%s', data)
+            # app_log.debug('client close\n%s', data)
             if upstream.closed():
                 return
             if data:
@@ -250,7 +249,7 @@ class ProxyHandler(tornado.web.StaticFileHandler):
             upstream.close()
 
         def upstream_close(data=None):
-            app_log.debug('upstream close\n%s', data)
+            # app_log.debug('upstream close\n%s', data)
             if client.closed():
                 return
             if data:
