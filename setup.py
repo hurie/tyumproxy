@@ -23,8 +23,9 @@ setup(
     author_email='hurie83@gmail.com',
     url='https://github.com/hurie/tyumproxy',
     install_requires=[
-        'pathlib>=1.0',
-        'tornado>=4.0.1',
+        'tornado==4.1',
+        'PyYAML==3.11',
+        'parse',
     ],
     include_package_data=True,
     packages=[

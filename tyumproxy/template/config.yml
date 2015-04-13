@@ -1,0 +1,36 @@
+server:
+  port: 8000
+
+cache:
+  path: _cache
+  lifetime: 1
+
+proxy:
+  timeout: 3600
+
+logging:
+  version: 1
+  disable_existing_loggers: false
+  formatters:
+    simple:
+      format: '%(levelname)s: %(message)s'
+    verbose:
+      format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      level: DEBUG
+      formatter: simple
+    file:
+      class: logging.handlers.TimedRotatingFileHandler
+      level: DEBUG
+      formatter: verbose
+      filename: tyumproxy.log
+      when: w6
+      interval: 1
+      backupCount: 5
+  root:
+    handlers:
+    - console
+    - file
+    level: INFO

@@ -4,68 +4,48 @@ Created on Aug 15, 2014
 @author: Azhar
 """
 import argparse
-from configparser import ConfigParser
 import logging
 import logging.config
-from datetime import timedelta
 import os
-
-import pathlib
+from datetime import timedelta
 from pathlib import Path
-from tornado.log import app_log
-import tornado.web
+
 import tornado.ioloop
+import tornado.template
+import tornado.web
+from tornado.log import app_log
 from tornado.web import StaticFileHandler
-import tyumproxy
-from tyumproxy.handler import ProxyHandler
-import tyumproxy.template
+import yaml
+
+from . import template, yaml_anydict
+from .handler import ProxyHandler
+from tyumproxy.util import UrlTranspose
+from .util import LoaderMapAsOrderedDict
 
 
 logging.basicConfig()
 _log = logging.getLogger(__name__)
 
-CONFIG_FILENAME = 'tyumproxy.cfg'
+CONFIG_FILENAME = 'tyumproxy.yml'
 
 
 class Application(tornado.web.Application):
     def __init__(self, cfg, debug=False):
-        for k in cfg['loggers']['keys'].split(','):
-            del cfg['logger_' + k.strip()]
+        self.cache_path = Path(cfg['cache']['path']).resolve()
 
-        for k in cfg['handlers']['keys'].split(','):
-            del cfg['handler_' + k.strip()]
-
-        for k in cfg['formatters']['keys'].split(','):
-            del cfg['formatter_' + k.strip()]
-
-        del cfg['loggers']
-        del cfg['handlers']
-        del cfg['formatters']
+        if 'transpose' in cfg:
+            self.url_transpose = UrlTranspose(cfg['transpose'])
+        else:
+            self.url_transpose = lambda: None
 
         handlers = [
-            (r"/~/(.*)", StaticFileHandler, {'path': cfg['cache']['dir']}),
-            (r"(.*)", ProxyHandler),
+            (r"/~/(.*)", StaticFileHandler, {'path': cfg['cache']['path']}),
+            (r"(.*)", ProxyHandler, {'path': self.cache_path}),
         ]
 
         tornado.web.Application.__init__(self, handlers,
                                          debug=debug,
                                          **cfg)
-
-    def get_cache_path(self):
-        base = pathlib.Path(self.settings['cache']['dir'])
-        return base
-
-    def get_pattern(self, host):
-        if 'pattern/default' in self.settings:
-            patterns = [self.settings['pattern/default']]
-        else:
-            patterns = []
-
-        section = 'pattern/%s' % host
-        if section in self.settings:
-            patterns.insert(0, self.settings['pattern/%s' % host])
-
-        return patterns
 
 
 def merge_dict(source, other):
@@ -80,29 +60,48 @@ def merge_dict(source, other):
 
 
 def load_config(filename):
-    default_file = Path(tyumproxy.template.__file__).resolve().parent / 'default.cfg'
-    config_file = Path(filename)
+    filename = Path(filename).resolve()
+    if not filename.is_file():
+        raise Exception('{} not found'.format(filename))
 
-    cfg = ConfigParser(interpolation=None)
-    cfg['server'] = {}
-    cfg['server']['path'] = str(config_file.parent.resolve())
-    cfg.read([str(default_file), str(config_file)])
+    default_file = Path(template.__file__).resolve().parent / 'config.yml'
+    default_cfg = yaml.load(default_file.open('r'))
+
+    try:
+        cfg = yaml.load(filename.open('r')) or {}
+    except:
+        raise Exception('Unable to load configuration file {}'.format(filename))
+
+    merge_dict(default_cfg, cfg)
+
+    cfg = default_cfg
+    cfg['path'] = {}
+    cfg['path']['base'] = str(filename.parent)
     return cfg
 
 
-def setup_logging(filename):
-    default_file = Path(tyumproxy.template.__file__).resolve().parent / 'default.cfg'
-    config_file = Path(filename)
+def setup_logging(cfg):
+    logging_cfg = cfg['logging']
 
-    if config_file.exists():
-        logging.config.fileConfig(str(config_file))
-    else:
-        logging.config.fileConfig(str(default_file))
+    path = Path(cfg['path']['base'])
+    for handler in logging_cfg['handlers'].values():
+        fname = handler.get('filename')
+        if fname is None:
+            continue
+
+        fpath = Path(fname)
+        if fpath.is_absolute():
+            continue
+
+        handler['filename'] = str(path / fpath)
+
+    logging.config.dictConfig(logging_cfg)
 
 
 def setup(args):
     config = os.getcwd() / Path(args.config if 'config' in args else CONFIG_FILENAME)
     root = config.parent
+    template_dir = Path(template.__file__).parent
 
     if not args.replace and config.exists():
         print('{} already exists'.format(config))
@@ -110,9 +109,9 @@ def setup(args):
 
     def ask(question, error=None, default=None, info=None, cast=None):
         if default is None:
-            question = '-> {} ? '.format(question)
+            question = '-> {}? '.format(question)
         else:
-            question = '-> {} [{}] ? '.format(question, default)
+            question = '-> {} [{}]? '.format(question, default)
 
         if error is None:
             error = 'Invalid value'
@@ -157,14 +156,16 @@ def setup(args):
                 continue
             return path
 
-    default_file = Path(tyumproxy.template.__file__).resolve().parent / 'default.cfg'
+    LoaderMapAsOrderedDict.load_map_as_anydict()
+    yaml_anydict.dump_anydict_as_map(LoaderMapAsOrderedDict.anydict)
 
-    template_cfg = ConfigParser()
-    template_cfg.read(str(default_file))
+    template_file = template_dir / 'config.yml'
+    template_cfg = yaml.load(template_file.open('r'), Loader=LoaderMapAsOrderedDict)
 
     try:
         port = ask('Port to listen', 'Port range is 0 - 65535', 5000, cast=int)
-        cache_dir = ask_path('Cache directory', default=template_cfg['cache']['dir'])
+        cache_dir = ask_path('Cache directory', default=template_cfg['cache']['path'])
+        log_dir = ask_path('Application log path', default='.')
     except KeyboardInterrupt:
         print()
         print('Setup canceled!')
@@ -175,17 +176,31 @@ def setup(args):
         cache_dir.mkdir(parents=True)
     cache_dir = cache_dir.resolve()
 
-    template_cfg = ConfigParser()
-    template_cfg.read(str(default_file))
-
-    template_cfg['server']['port'] = str(port)
+    log_dir = root / log_dir
+    if not log_dir.exists():
+        log_dir.mkdir(parents=True)
+    log_dir = log_dir.resolve()
+    template_cfg['server']['port'] = port
     template_cfg['cache']['dir'] = str(cache_dir)
 
-    template_file = Path(tyumproxy.template.__file__).resolve().parent / 'template.cfg.txt'
+    for handler in template_cfg['logging']['handlers'].values():
+        fname = handler.get('filename')
+        if fname is None:
+            continue
+
+        fpath = Path(fname)
+        if fpath.is_absolute():
+            continue
+
+        handler['filename'] = str(log_dir / fpath)
+
+    template_file = template_dir / 'config.template'
     text = template_file.open('r').read()
 
     print('write configuration to {}'.format(config))
-    config.open('w').write(text.format(**template_cfg))
+    t = tornado.template.Template(text)
+    with config.open('w') as f:
+        f.write(t.generate(**template_cfg).decode())
 
 
 def start(args, cfg):
@@ -273,7 +288,7 @@ def main():
         parser.error(e)
         raise
 
-    setup_logging(args.config)
+    setup_logging(cfg)
     start(args, cfg)
 
 

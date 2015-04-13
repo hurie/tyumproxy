@@ -4,13 +4,12 @@ Created on Aug 15, 2014
 @author: Azhar
 """
 import hashlib
-import re
 import socket
 from tempfile import NamedTemporaryFile
 from time import time
 from urllib.parse import urlsplit
-
 from pathlib import Path
+
 from tornado.httpclient import AsyncHTTPClient
 from tornado.httputil import HTTPHeaders
 from tornado.log import app_log
@@ -24,8 +23,9 @@ class ProxyHandler(tornado.web.StaticFileHandler):
     CHUNK_SIZE = 64 * 1024
     SUPPORTED_METHODS = ['GET', 'CONNECT']
 
-    def initialize(self):
-        self.cache_dir = self.application.get_cache_path().resolve()
+    def initialize(self, path, default_filename=None):
+        self.cache_dir = path
+        self.url_transpose = self.application.url_transpose
 
         tornado.web.StaticFileHandler.initialize(self, str(self.cache_dir))
 
@@ -61,39 +61,13 @@ class ProxyHandler(tornado.web.StaticFileHandler):
         self.cacheable = self.is_cacheable(url.path)
         app_log.debug('is cacheable %r', self.cacheable)
         if self.cacheable:
-            patterns = self.application.get_pattern(url.netloc)
-            for pattern in patterns:
-                match = None
-                i = 0
-                while not match and str(i) in pattern:
-                    match = re.match(pattern[str(i)], url.path)
-                    i += 1
-
-                if match:
-                    break
-            else:
-                pattern = []
-                match = None
-
-            if match:
-                d = {k: pattern[k] for k in pattern if k != '_'}
-                d.update(match.groupdict())
-
-                try:
-                    pathname = '{releasename}/{releasever}/{reponame}/{basearch}'.format(**d).lower()
-
-                    if 'filepath' in d and d['filepath']:
-                        filename = '{pathname}/{filepath}/{filename}'.format(pathname=pathname, **d)
-                    else:
-                        filename = '{pathname}/{filename}'.format(pathname=pathname, **d)
-                except Exception as e:
-                    match = None
-                else:
-                    self.cache_file = self.cache_dir / ('~%s' % filename)
-
-            if not match:
+            cache_file = self.url_transpose(path)
+            if not cache_file:
                 netloc = [x for x in reversed(url.netloc.split('.'))]
                 self.cache_file = self.cache_dir / '.'.join(netloc) / url.path[1:]
+            else:
+                self.cache_file = self.cache_dir / cache_file
+
         else:
             uri = self.request.uri.encode()
             cache_id = hashlib.sha1(uri).hexdigest()
