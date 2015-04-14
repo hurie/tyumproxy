@@ -57,6 +57,9 @@ class ProxyHandler(tornado.web.StaticFileHandler):
 
         url = urlsplit(path)
 
+        if 'Range' in self.request.headers:
+            del self.request.headers['Range']
+
         self.cache_url = path.replace(url[0] + '://', '')
         self.cacheable = self.is_cacheable(url.path)
         app_log.debug('is cacheable %r', self.cacheable)
@@ -118,19 +121,27 @@ class ProxyHandler(tornado.web.StaticFileHandler):
 
     def process_header(self, line):
         header = line.strip()
-        app_log.debug('header %s', header)
+        app_log.debug('response header %s', header)
         if header:
             if self.req_headers is None:
                 self.req_headers = HTTPHeaders()
-                _, self.req_code, _ = header.split(' ', 2)
-                self.req_code = int(self.req_code)
-                if self.req_code in (599, 304):
-                    self.req_code = 200
+                _, status, _ = header.split(' ', 2)
+                status = int(status)
+
+                if status == 599:
+                    # network error but cache file exists
+                    if self.cache_file.exists():
+                        status = 200
+                elif status == 304:
+                    status = 200
+                elif status == 200:
+                    app_log.debug('prepare temp file for %s', self.req_path)
+                    self.cache_fd = NamedTemporaryFile(dir=str(self.cache_dir), delete=False)
+
+                self.set_status(status)
             else:
                 self.req_headers.parse_line(line)
             return
-
-        self.set_status(self.req_code)
 
         for header in ('Date', 'Cache-Control', 'Server', 'Content-Type', 'Location'):
             val = self.req_headers.get(header)
@@ -148,10 +159,7 @@ class ProxyHandler(tornado.web.StaticFileHandler):
         if self._finished:
             return
 
-        if self.cache_file is not None:
-            if self.cache_fd is None:
-                app_log.debug('process body %s', self.req_path)
-                self.cache_fd = NamedTemporaryFile(dir=str(self.cache_dir), delete=False)
+        if self.cache_fd is not None:
             self.cache_fd.write(chunk)
 
         self.write(chunk)
@@ -163,16 +171,19 @@ class ProxyHandler(tornado.web.StaticFileHandler):
             app_log.debug('skip process finish')
             return
 
+        app_log.info('code %s fo %s', response.code, self.request.uri)
+
         if response.code in (599, 304):
-            app_log.info('code %s fo %s', response.code, self.request.uri)
-            if self.cache_file is not None and self.cache_file.exists():
-                self.cache_file.touch()
+            if self.cache_file.exists():
+                if response.code == 304:
+                    self.cache_file.touch()
+
                 app_log.info('use %s', self.cache_file)
                 self.cache_fd = self.cache_file.open('rb')
                 self.process_file()
                 return
 
-        if self.cache_file is not None:
+        elif 200 <= response.code < 300:
             if self.cache_fd is not None:
                 self.cache_fd.close()
 
@@ -187,15 +198,6 @@ class ProxyHandler(tornado.web.StaticFileHandler):
                 app_log.info('saved %s', self.cache_file)
 
         self.cache_fd = None
-
-        if response.code == 599:
-            self.set_status(599, 'network connect timeout error')
-        else:
-            try:
-                self.set_status(response.code)
-            except Exception as e:
-                app_log.error(e)
-                self.set_status(500, 'Internal server error')
         self.finish()
 
     def process_file(self):
