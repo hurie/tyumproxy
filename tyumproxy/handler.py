@@ -57,8 +57,6 @@ class ProxyHandler(tornado.web.StaticFileHandler):
 
         url = urlsplit(path)
 
-        if 'Range' in self.request.headers:
-            del self.request.headers['Range']
 
         self.cache_url = path.replace(url[0] + '://', '')
         self.cacheable = self.is_cacheable(url.path)
@@ -104,6 +102,8 @@ class ProxyHandler(tornado.web.StaticFileHandler):
         args = {k: v[0] for k, v in self.request.arguments.items()}
 
         app_log.info('fetch %s', self.request.uri)
+        if 'Range' in self.request.headers:
+            del self.request.headers['Range']
 
         self.client = AsyncHTTPClient()
         self.client.fetch(self.request.uri,
